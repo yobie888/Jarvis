@@ -2,6 +2,7 @@
   "name": "jarvis",
   "version": "1.0.0",
   "main": "index.js",
+  "type": "commonjs",
   "scripts": {
     "start": "node index.js"
   },
@@ -9,8 +10,8 @@
     "node": "18.x"
   },
   "dependencies": {
-    "discord.js": "^14.0.0",
-    "openai": "^4.0.0",
-    "dotenv": "^16.0.0"
+    "discord.js": "^14.14.1",
+    "openai": "^4.28.0",
+    "dotenv": "^16.4.5"
   }
 }
