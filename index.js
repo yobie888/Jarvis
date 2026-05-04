@@ -1,7 +1,7 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
 
-// fetch compatible Railway / Node
+// fetch compatible Node 18 / Railway
 const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 
 const client = new Client({
@@ -12,15 +12,18 @@ const client = new Client({
     ],
 });
 
+// Variables environnement
 const CHANNEL_ID = process.env.CHANNEL_ID;
 const HF_API_KEY = process.env.HF_API_KEY;
 
-// Modèle IA Hugging Face
+// Modèle Hugging Face
 const MODEL_URL = "https://api-inference.huggingface.co/models/google/flan-t5-large";
 
+// Prompt système
 const SYSTEM_PROMPT = `
-Tu es Jodie, un assistant expert du jeu Foundation: Galactic Frontier.
-Tu donnes des conseils simples, efficaces et orientés progression.
+Tu es Jodie, une assistante experte du jeu Foundation: Galactic Frontier.
+Tu donnes des conseils clairs, stratégiques et utiles pour progresser efficacement.
+Réponses courtes, précises et orientées gameplay.
 `;
 
 client.on('ready', () => {
@@ -34,7 +37,7 @@ client.on('messageCreate', async (message) => {
     try {
         await message.channel.sendTyping();
 
-        const prompt = `${SYSTEM_PROMPT}\n\nUtilisateur: ${message.content}`;
+        const prompt = `${SYSTEM_PROMPT}\n\nJoueur: ${message.content}\nRéponse:`;
 
         const response = await fetch(MODEL_URL, {
             method: "POST",
@@ -54,7 +57,7 @@ client.on('messageCreate', async (message) => {
         const reply =
             data?.[0]?.generated_text ||
             data?.generated_text ||
-            "Erreur IA : aucune réponse.";
+            "Je n’ai pas pu générer de réponse.";
 
         await message.reply(reply);
 
