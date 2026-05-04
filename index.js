@@ -32,11 +32,11 @@ client.on('messageCreate', async (message) => {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "mistralai/mistral-7b-instruct:free",
+        model: "deepseek/deepseek-chat-v3-0324:free",
         messages: [
           {
             role: "system",
-            content: "Tu es Jodie, experte du jeu Foundation Galactic Frontier. Tu aides les joueurs avec stratégies et optimisation."
+            content: "Tu es Jodie, experte du jeu Foundation Galactic Frontier. Tu aides les joueurs avec builds, stratégie, raids, économie et progression."
           },
           {
             role: "user",
