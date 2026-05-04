@@ -1,5 +1,5 @@
 require("dotenv").config();
-const { Client, GatewayIntentBits } = require("discord.js");
+const { Client, GatewayIntentBits, WebhookClient } = require("discord.js");
 const db = require("./db");
 const KNOWLEDGE = require("./knowledge");
 
@@ -12,19 +12,23 @@ const client = new Client({
 });
 
 /* =========================
-   PROMPT IA FIXE
+   WEBHOOK (IMPORTANT)
+========================= */
+const webhook = new WebhookClient({
+    url: process.env.WEBHOOK_URL
+});
+
+/* =========================
+   SYSTEM PROMPT
 ========================= */
 const SYSTEM_PROMPT = `
 Tu es JODIE.
 
 RÈGLES ABSOLUES :
-- Tu es une IA, jamais un joueur
-- Tu réponds en TEXTE SIMPLE UNIQUEMENT
-- INTERDICTION ABSOLUE d'utiliser embeds, markdown avancé ou format spécial
-- Réponse brute uniquement (texte Discord standard)
-- Le joueur est toujours l'utilisateur Discord
-- Tu dois utiliser son pseudo EXACT
-- Tu ne dois jamais t'appeler joueur
+- Tu es une IA
+- Réponds uniquement en texte brut
+- Pas d'embeds
+- Pas de mise en forme avancée
 `;
 
 /* =========================
@@ -52,83 +56,36 @@ async function askIA(prompt) {
 }
 
 /* =========================
-   SCORE SYSTEM
-========================= */
-function updateUser(userId, message) {
-    db.get("SELECT * FROM users WHERE id = ?", [userId], (err, row) => {
-        if (!row) {
-            db.run("INSERT INTO users (id, name, score, rank) VALUES (?, ?, 0, 'RECRUE')",
-                [userId, "unknown"]);
-        }
-
-        let score = (row?.score || 0);
-        const t = message.toLowerCase();
-
-        if (t.includes("raid")) score += 2;
-        if (t.includes("vs")) score += 2;
-        if (t.includes("tribu")) score += 2;
-
-        let rank = "RECRUE";
-        if (score > 15) rank = "COMMANDANT";
-        else if (score > 8) rank = "STRATÈGE";
-        else if (score > 3) rank = "CONFIRMÉ";
-
-        db.run("UPDATE users SET score = ?, rank = ? WHERE id = ?", [score, rank, userId]);
-    });
-}
-
-/* =========================
    MESSAGE HANDLER
 ========================= */
 client.on("messageCreate", async (message) => {
+    if (message.author.bot) return;
 
-    /* 🔴 IMPORTANT : NE PAS IGNORER LES BOTS */
-    if (!message.content) return;
-
-    const userId = message.author.id;
     const username = message.author.username;
 
-    updateUser(userId, message.content);
-
-    db.all(
-        "SELECT * FROM messages WHERE userId = ? ORDER BY id DESC LIMIT 5",
-        [userId],
-        async (err, rows) => {
-
-            const history = rows
-                .map(r => `Joueur: ${r.question}\nJodie: ${r.answer}`)
-                .join("\n");
-
-            const prompt = `
+    const prompt = `
 ${KNOWLEDGE}
 
-JOUEUR:
-Nom: ${username}
-ID: ${userId}
-
-HISTORIQUE:
-${history}
-
-QUESTION:
-${message.content}
-
-Réponds en texte simple uniquement.
+Utilisateur: ${username}
+Message: ${message.content}
 `;
 
-            const reply = await askIA(prompt);
+    const reply = await askIA(prompt);
 
-            db.run(
-                "INSERT INTO messages (userId, question, answer) VALUES (?, ?, ?)",
-                [userId, message.content, reply]
-            );
-
-            /* 🔴 ULTRA IMPORTANT POUR TON TRANSLATOR */
-            message.channel.send({
-                content: reply,
-                allowedMentions: { parse: [] }
-            });
-        }
+    db.run(
+        "INSERT INTO messages (userId, question, answer) VALUES (?, ?, ?)",
+        [message.author.id, message.content, reply]
     );
+
+    /* =========================
+       ENVOI VIA WEBHOOK
+       (FAUX USER = DÉTECTÉ PAR TRANSLATOR)
+    ========================= */
+    await webhook.send({
+        content: reply,
+        username: "JODIE IA",
+        avatarURL: "https://i.imgur.com/your-avatar.png"
+    });
 });
 
 /* =========================
