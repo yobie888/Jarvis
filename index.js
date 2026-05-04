@@ -15,8 +15,8 @@ const CHANNEL_ID = process.env.CHANNEL_ID;
 const API_KEY = process.env.GROQ_API_KEY;
 
 const SYSTEM_PROMPT = `
-Tu es Jodie, une assistante experte du jeu Foundation: Galactic Frontier.
-Tu donnes des conseils stratégiques clairs, utiles et efficaces pour progresser.
+Tu es Jodie, experte du jeu Foundation: Galactic Frontier.
+Tu donnes des conseils clairs, efficaces et stratégiques.
 `;
 
 client.on('ready', () => {
@@ -37,7 +37,7 @@ client.on('messageCreate', async (message) => {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "llama3-8b-8192",
+        model: "llama-3.1-8b-instant",
         messages: [
           {
             role: "system",
