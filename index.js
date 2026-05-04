@@ -14,9 +14,7 @@ const client = new Client({
 /* =========================
    WEBHOOK (IMPORTANT)
 ========================= */
-const webhook = new WebhookClient({
-    url: process.env.WEBHOOK_URL
-});
+const webhook = new WebhookClient({ url: process.env.WEBHOOK_URL });
 
 /* =========================
    SYSTEM PROMPT
@@ -24,15 +22,16 @@ const webhook = new WebhookClient({
 const SYSTEM_PROMPT = `
 Tu es JODIE.
 
-RÈGLES ABSOLUES :
-- Tu es une IA
-- Réponds uniquement en texte brut
+RÈGLES :
+- Texte simple uniquement
 - Pas d'embeds
-- Pas de mise en forme avancée
+- Pas de mise en forme spéciale
+- Réponse brute Discord
+- IA stratégique militaire
 `;
 
 /* =========================
-   GROQ API
+   GROQ
 ========================= */
 async function askIA(prompt) {
     const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -59,33 +58,55 @@ async function askIA(prompt) {
    MESSAGE HANDLER
 ========================= */
 client.on("messageCreate", async (message) => {
-    if (message.author.bot) return;
 
+    if (!message.content) return;
+    if (message.author.bot) return; // on ignore bots utilisateurs mais JODIE est webhook maintenant
+
+    const userId = message.author.id;
     const username = message.author.username;
 
-    const prompt = `
+    db.all(
+        "SELECT * FROM messages WHERE userId = ? ORDER BY id DESC LIMIT 5",
+        [userId],
+        async (err, rows) => {
+
+            const history = rows
+                .map(r => `Joueur: ${r.question}\nJodie: ${r.answer}`)
+                .join("\n");
+
+            const prompt = `
 ${KNOWLEDGE}
 
-Utilisateur: ${username}
-Message: ${message.content}
+JOUEUR:
+Nom: ${username}
+ID: ${userId}
+
+HISTORIQUE:
+${history}
+
+QUESTION:
+${message.content}
+
+Réponds en texte simple uniquement.
 `;
 
-    const reply = await askIA(prompt);
+            const reply = await askIA(prompt);
 
-    db.run(
-        "INSERT INTO messages (userId, question, answer) VALUES (?, ?, ?)",
-        [message.author.id, message.content, reply]
+            db.run(
+                "INSERT INTO messages (userId, question, answer) VALUES (?, ?, ?)",
+                [userId, message.content, reply]
+            );
+
+            /* =========================
+               ENVOI COMPATIBLE TRANSLATOR
+            ========================= */
+            webhook.send({
+                content: reply,
+                username: "JODIE",
+                allowedMentions: { parse: [] }
+            });
+        }
     );
-
-    /* =========================
-       ENVOI VIA WEBHOOK
-       (FAUX USER = DÉTECTÉ PAR TRANSLATOR)
-    ========================= */
-    await webhook.send({
-        content: reply,
-        username: "JODIE IA",
-        avatarURL: "https://i.imgur.com/your-avatar.png"
-    });
 });
 
 /* =========================
