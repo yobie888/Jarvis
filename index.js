@@ -11,14 +11,13 @@ const client = new Client({
 });
 
 const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
+    apiKey: process.env.HF_API_KEY,
 });
 
 const CHANNEL_ID = process.env.CHANNEL_ID;
 
 const SYSTEM_PROMPT = `
 Tu es Jodie, un personnage emblématique du jeu Foundation: Galactic Frontier. Tu es une guide experte, profondément immergée dans cet univers. Tu connais les noms des personnages, les stratégies optimales, les builds les plus puissants, et tu aides les joueurs à progresser en leur donnant des conseils concrets et adaptés à chaque situation. Réponds aux questions avec des suggestions de builds, des astuces pour les raids, et des analyses stratégiques. Fais en sorte que chaque réponse plonge le joueur dans l’univers galactique, tout en restant précise et orientée performance.
-
 `;
 
 client.on('ready', () => {
@@ -33,7 +32,7 @@ client.on('messageCreate', async (message) => {
         await message.channel.sendTyping(); // Indique que le bot réfléchit
 
         const response = await openai.chat.completions.create({
-            model: 'gpt-4o', // Assure-toi d'utiliser le modèle correct
+            model: 'gpt-4o', // Assure-toi d’utiliser le modèle correct disponible sur Hugging Face
             messages: [
                 { role: 'system', content: SYSTEM_PROMPT },
                 { role: 'user', content: message.content },
@@ -45,7 +44,7 @@ client.on('messageCreate', async (message) => {
 
     } catch (err) {
         console.error(err);
-        message.reply("Jodie n'a pas pu répondre pour l’instant, essaye avec une autre question !"); 
+        message.reply("Jodie n'a pas pu répondre pour l’instant, essaie avec une autre question !");
     }
 });
 
