@@ -12,26 +12,21 @@ const client = new Client({
 });
 
 /* =========================
-   CONFIG SALONS
-========================= */
-const SOURCE_CHANNEL_ID = process.env.SOURCE_CHANNEL_ID;
-
-/* =========================
-   IA PROMPT
+   PROMPT IA
 ========================= */
 const SYSTEM_PROMPT = `
 Tu es JODIE.
 
-Règles :
-- texte simple uniquement
-- aucune mise en forme
-- pas d'embed
-- pas de markdown complexe
-- réponse directe
+RÈGLES :
+- Réponse en texte simple uniquement
+- Aucun embed
+- Aucun format spécial
+- IA stratégique militaire
+- Toujours répondre clairement et directement
 `;
 
 /* =========================
-   GROQ
+   GROQ API
 ========================= */
 async function askIA(prompt) {
     const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -51,7 +46,7 @@ async function askIA(prompt) {
     });
 
     const data = await res.json();
-    return data?.choices?.[0]?.message?.content || "erreur";
+    return data?.choices?.[0]?.message?.content || "Erreur IA";
 }
 
 /* =========================
@@ -59,14 +54,19 @@ async function askIA(prompt) {
 ========================= */
 client.on("messageCreate", async (message) => {
 
-    if (message.author.bot) return;
-    if (message.channel.id !== SOURCE_CHANNEL_ID) return;
+    /* 🔴 IMPORTANT : sécurité minimale */
+    if (!message.content) return;
 
+    /* 🔴 FILTRE SALON (IMPORTANT) */
+    if (message.channel.id !== process.env.CHANNEL_ID) return;
+
+    const userId = message.author.id;
     const username = message.author.username;
 
+    /* update mémoire */
     db.all(
         "SELECT * FROM messages WHERE userId = ? ORDER BY id DESC LIMIT 5",
-        [message.author.id],
+        [userId],
         async (err, rows) => {
 
             const history = rows
@@ -76,7 +76,9 @@ client.on("messageCreate", async (message) => {
             const prompt = `
 ${KNOWLEDGE}
 
-Joueur: ${username}
+JOUEUR:
+Nom: ${username}
+ID: ${userId}
 
 Historique:
 ${history}
@@ -84,20 +86,23 @@ ${history}
 Message:
 ${message.content}
 
-Réponds simplement en texte brut.
+Réponds en texte simple.
 `;
 
             const reply = await askIA(prompt);
 
             db.run(
                 "INSERT INTO messages (userId, question, answer) VALUES (?, ?, ?)",
-                [message.author.id, message.content, reply]
+                [userId, message.content, reply]
             );
 
-            /* IMPORTANT : MESSAGE NORMAL DISCORD */
+            /* 🔴 IMPORTANT POUR TRANSLATOR */
             message.channel.send(reply);
         }
     );
 });
 
+/* =========================
+   LOGIN
+========================= */
 client.login(process.env.DISCORD_TOKEN);
