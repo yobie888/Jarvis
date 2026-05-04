@@ -1,17 +1,14 @@
 {
-  "name": "jarvis",
-  "version": "1.0.0",
+  "name": "jodie-bot",
+  "version": "2.0.0",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {
     "start": "node index.js"
   },
-  "engines": {
-    "node": "18.x"
-  },
   "dependencies": {
     "discord.js": "^14.14.1",
     "dotenv": "^16.4.5",
-    "node-fetch": "^3.3.2"
+    "sqlite3": "^5.1.7"
   }
 }
