@@ -19,20 +19,12 @@ Tu es JODIE.
 
 RÈGLES ABSOLUES :
 - Tu es une IA, jamais un joueur
-- Tu dois utiliser le pseudo du joueur
-- Tu réponds de manière stratégique
-- Tu te souviens du contexte
-
-IMPORTANT FORMAT :
-- Tu écris UNIQUEMENT du texte simple
-- INTERDICTION ABSOLUE :
-  * embeds
-  * markdown complexe
-  * JSON
-  * code blocks
-  * format rich
-- Tu réponds comme un humain dans Discord
-- phrases simples lisibles par un bot translator
+- Tu réponds en TEXTE SIMPLE UNIQUEMENT
+- INTERDICTION ABSOLUE d'utiliser embeds, markdown avancé ou format spécial
+- Réponse brute uniquement (texte Discord standard)
+- Le joueur est toujours l'utilisateur Discord
+- Tu dois utiliser son pseudo EXACT
+- Tu ne dois jamais t'appeler joueur
 `;
 
 /* =========================
@@ -64,17 +56,12 @@ async function askIA(prompt) {
 ========================= */
 function updateUser(userId, message) {
     db.get("SELECT * FROM users WHERE id = ?", [userId], (err, row) => {
-
         if (!row) {
-            db.run(
-                "INSERT INTO users (id, name, score, rank) VALUES (?, ?, 0, 'RECRUE')",
-                [userId, "unknown"]
-            );
-            row = { score: 0 };
+            db.run("INSERT INTO users (id, name, score, rank) VALUES (?, ?, 0, 'RECRUE')",
+                [userId, "unknown"]);
         }
 
-        let score = row.score || 0;
-
+        let score = (row?.score || 0);
         const t = message.toLowerCase();
 
         if (t.includes("raid")) score += 2;
@@ -86,24 +73,8 @@ function updateUser(userId, message) {
         else if (score > 8) rank = "STRATÈGE";
         else if (score > 3) rank = "CONFIRMÉ";
 
-        db.run(
-            "UPDATE users SET score = ?, rank = ? WHERE id = ?",
-            [score, rank, userId]
-        );
+        db.run("UPDATE users SET score = ?, rank = ? WHERE id = ?", [score, rank, userId]);
     });
-}
-
-/* =========================
-   FORCER TEXTE SIMPLE (IMPORTANT POUR TRANSLATOR BOT)
-========================= */
-function sanitizeOutput(text) {
-    return text
-        .replace(/```/g, "")       // supprime code blocks
-        .replace(/\*\*/g, "")      // supprime bold markdown
-        .replace(/__/g, "")        // underline
-        .replace(/#/g, "")         // headers markdown
-        .replace(/$begin:math:display$\|$end:math:display$/g, "")     // brackets
-        .trim();
 }
 
 /* =========================
@@ -111,11 +82,8 @@ function sanitizeOutput(text) {
 ========================= */
 client.on("messageCreate", async (message) => {
 
-    // ignore bots (IMPORTANT)
-    if (message.author.bot) return;
-
-    // only channel target
-    if (message.channel.id !== process.env.CHANNEL_ID) return;
+    /* 🔴 IMPORTANT : NE PAS IGNORER LES BOTS */
+    if (!message.content) return;
 
     const userId = message.author.id;
     const username = message.author.username;
@@ -128,33 +96,37 @@ client.on("messageCreate", async (message) => {
         async (err, rows) => {
 
             const history = rows
-                .map(r => `Joueur: ${r.question} | Jodie: ${r.answer}`)
+                .map(r => `Joueur: ${r.question}\nJodie: ${r.answer}`)
                 .join("\n");
 
             const prompt = `
 ${KNOWLEDGE}
 
-Joueur: ${username}
-Message: ${message.content}
+JOUEUR:
+Nom: ${username}
+ID: ${userId}
 
-Historique:
+HISTORIQUE:
 ${history}
 
-Réponds clairement en texte simple.
+QUESTION:
+${message.content}
+
+Réponds en texte simple uniquement.
 `;
 
-            let reply = await askIA(prompt);
-
-            // IMPORTANT FIX TRANSLATOR BOT
-            reply = sanitizeOutput(reply);
+            const reply = await askIA(prompt);
 
             db.run(
                 "INSERT INTO messages (userId, question, answer) VALUES (?, ?, ?)",
                 [userId, message.content, reply]
             );
 
-            // IMPORTANT: reply as NORMAL MESSAGE (not embed, not webhook)
-            await message.channel.send(reply);
+            /* 🔴 ULTRA IMPORTANT POUR TON TRANSLATOR */
+            message.channel.send({
+                content: reply,
+                allowedMentions: { parse: [] }
+            });
         }
     );
 });
