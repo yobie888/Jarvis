@@ -17,19 +17,12 @@ const client = new Client({
 const SYSTEM_PROMPT = `
 Tu es JODIE.
 
-RÈGLES ABSOLUES :
-- Tu es une IA stratégique
-- Tu n’es jamais un joueur
-- Tu reconnais les joueurs par leur pseudo Discord
-- Tu mémorises les conversations
-- Tu analyses les situations de jeu
-
-STYLE IMPORTANT :
-- Réponses uniquement en texte brut
-- AUCUN format embed
-- AUCUN JSON
-- AUCUN markdown décoratif lourd
-- Style simple, lisible pour bot translator
+Règles :
+- IA stratégique
+- mémoire des joueurs
+- texte simple uniquement
+- PAS d'embeds
+- PAS de format spécial
 `;
 
 /* =========================
@@ -57,23 +50,7 @@ async function askIA(prompt) {
 }
 
 /* =========================
-   WEBHOOK SEND (IMPORTANT)
-========================= */
-async function sendWebhook(content, username) {
-    await fetch(process.env.WEBHOOK_URL, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            username: username || "JODIE",
-            content: content
-        })
-    });
-}
-
-/* =========================
-   SCORE + RANK
+   SCORE SYSTEM
 ========================= */
 function updateUser(userId, message) {
     db.get("SELECT * FROM users WHERE id = ?", [userId], (err, row) => {
@@ -137,7 +114,7 @@ ${history}
 QUESTION:
 ${message.content}
 
-Réponds clairement en texte brut.
+Réponds simplement en texte brut.
 `;
 
             const reply = await askIA(prompt);
@@ -147,13 +124,10 @@ Réponds clairement en texte brut.
                 [userId, message.content, reply]
             );
 
-            // IMPORTANT : envoi webhook SANS embed
-            await sendWebhook(reply, "JODIE");
+            // Envoi normal de message (pas de webhook, pas d'embed)
+            await message.channel.send(reply);
         }
     );
 });
 
-/* =========================
-   LOGIN
-========================= */
 client.login(process.env.DISCORD_TOKEN);
