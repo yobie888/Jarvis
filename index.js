@@ -34,11 +34,11 @@ client.on('messageCreate', async (message) => {
         "X-Title": "Jarvis Bot"
       },
       body: JSON.stringify({
-        model: "mistralai/mistral-7b-instruct:free",
+        model: "meta-llama/llama-3.1-8b-instruct:free",
         messages: [
           {
             role: "system",
-            content: "Tu es Jodie, experte du jeu Foundation Galactic Frontier. Tu aides les joueurs avec stratégie, builds, raids et progression."
+            content: "Tu es Jodie, experte du jeu Foundation Galactic Frontier."
           },
           {
             role: "user",
@@ -49,8 +49,6 @@ client.on('messageCreate', async (message) => {
     });
 
     const data = await response.json();
-
-    console.log("DATA:", data);
 
     const reply =
       data?.choices?.[0]?.message?.content ||
