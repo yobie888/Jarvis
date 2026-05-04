@@ -12,7 +12,7 @@ const client = new Client({
 });
 
 /* =========================
-   PROMPT IA FIXE
+   PROMPT IA
 ========================= */
 const SYSTEM_PROMPT = `
 Tu es JODIE.
@@ -20,18 +20,34 @@ Tu es JODIE.
 RÈGLES ABSOLUES :
 - Tu es une IA, jamais un joueur
 - Le joueur est toujours l'utilisateur Discord
-- Tu dois utiliser son pseudo EXACT
-- Tu ne dois jamais t'appeler joueur
-
-COMPORTEMENT :
-- reconnaissance joueur obligatoire
-- mémoire des conversations
-- analyse stratégique
-- commandant militaire
+- Utilise son pseudo EXACT
+- Aucun embed, aucun format enrichi
+- Réponse texte simple uniquement
+- Pas de markdown complexe (pas de *, pas de ###, pas de blocs)
+- Réponds comme un commandant militaire
 `;
 
 /* =========================
-   GROQ
+   NETTOYAGE TEXTE (IMPORTANT)
+   => FORCE FORMAT BOT TRANSLATOR
+========================= */
+function cleanText(text) {
+    if (!text) return "";
+
+    return text
+        // supprime markdown
+        .replace(/```[\s\S]*?```/g, "")
+        .replace(/\*\*/g, "")
+        .replace(/\*/g, "")
+        .replace(/#/g, "")
+        .replace(/>/g, "")
+        // supprime retours excessifs
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+}
+
+/* =========================
+   GROQ API
 ========================= */
 async function askIA(prompt) {
     const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -51,7 +67,10 @@ async function askIA(prompt) {
     });
 
     const data = await res.json();
-    return data?.choices?.[0]?.message?.content || "Erreur IA";
+
+    let reply = data?.choices?.[0]?.message?.content || "Erreur IA";
+
+    return cleanText(reply); // 🔥 FORCÉ TEXTE BRUT
 }
 
 /* =========================
@@ -59,8 +78,16 @@ async function askIA(prompt) {
 ========================= */
 function updateUser(userId, message) {
     db.get("SELECT * FROM users WHERE id = ?", [userId], (err, row) => {
-        let score = row?.score || 0;
 
+        if (!row) {
+            db.run(
+                "INSERT INTO users (id, name, score, rank) VALUES (?, ?, 0, 'RECRUE')",
+                [userId, "unknown"]
+            );
+            row = { score: 0 };
+        }
+
+        let score = row.score || 0;
         const t = message.toLowerCase();
 
         if (t.includes("raid")) score += 2;
@@ -72,43 +99,18 @@ function updateUser(userId, message) {
         else if (score > 8) rank = "STRATÈGE";
         else if (score > 3) rank = "CONFIRMÉ";
 
-        if (!row) {
-            db.run(
-                "INSERT INTO users (id, name, score, rank) VALUES (?, ?, ?, ?)",
-                [userId, "unknown", score, rank]
-            );
-        } else {
-            db.run(
-                "UPDATE users SET score = ?, rank = ? WHERE id = ?",
-                [score, rank, userId]
-            );
-        }
+        db.run(
+            "UPDATE users SET score = ?, rank = ? WHERE id = ?",
+            [score, rank, userId]
+        );
     });
-}
-
-/* =========================
-   OUTILS ENVOI MESSAGE
-   (IMPORTANT POUR TRANSLATOR)
-========================= */
-
-// découpe si message trop long
-function splitMessage(text, max = 2000) {
-    const parts = [];
-    while (text.length > max) {
-        let slice = text.slice(0, max);
-        let lastBreak = slice.lastIndexOf("\n");
-        if (lastBreak > 0) slice = slice.slice(0, lastBreak);
-        parts.push(slice);
-        text = text.slice(slice.length);
-    }
-    if (text.length) parts.push(text);
-    return parts;
 }
 
 /* =========================
    MESSAGE HANDLER
 ========================= */
 client.on("messageCreate", async (message) => {
+
     if (message.author.bot) return;
     if (message.channel.id !== process.env.CHANNEL_ID) return;
 
@@ -122,12 +124,12 @@ client.on("messageCreate", async (message) => {
         [userId],
         async (err, rows) => {
 
-            const history = (rows || [])
+            const history = rows
                 .map(r => `Joueur: ${r.question}\nJodie: ${r.answer}`)
-                .reverse()
                 .join("\n");
 
             const prompt = `
+KNOWLEDGE BASE:
 ${KNOWLEDGE}
 
 JOUEUR:
@@ -140,7 +142,7 @@ ${history}
 QUESTION:
 ${message.content}
 
-Réponds précisément.
+Réponds uniquement en texte brut simple, sans mise en forme.
 `;
 
             const reply = await askIA(prompt);
@@ -150,17 +152,8 @@ Réponds précisément.
                 [userId, message.content, reply]
             );
 
-            /* =========================
-               ENVOI COMPATIBLE TRANSLATOR
-            ========================= */
-
-            const messages = splitMessage(reply);
-
-            for (const msg of messages) {
-                await message.reply({
-                    content: msg
-                });
-            }
+            // 🔥 IMPORTANT : PAS D’EMBED
+            await message.channel.send(reply);
         }
     );
 });
