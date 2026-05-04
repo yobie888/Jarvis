@@ -34,11 +34,11 @@ client.on('messageCreate', async (message) => {
         "X-Title": "Jarvis Bot"
       },
       body: JSON.stringify({
-        model: "deepseek/deepseek-chat-v3-0324:free",
+        model: "mistralai/mistral-7b-instruct:free",
         messages: [
           {
             role: "system",
-            content: "Tu es Jodie, experte stratégie gaming."
+            content: "Tu es Jodie, experte du jeu Foundation Galactic Frontier. Tu aides les joueurs avec stratégie, builds, raids et progression."
           },
           {
             role: "user",
@@ -50,7 +50,7 @@ client.on('messageCreate', async (message) => {
 
     const data = await response.json();
 
-    console.log("OPENROUTER DATA:", JSON.stringify(data, null, 2));
+    console.log("DATA:", data);
 
     const reply =
       data?.choices?.[0]?.message?.content ||
@@ -60,7 +60,7 @@ client.on('messageCreate', async (message) => {
     await message.reply(reply);
 
   } catch (err) {
-    console.error("ERREUR:", err);
+    console.error(err);
     await message.reply("Erreur IA.");
   }
 });
