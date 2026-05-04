@@ -1,7 +1,7 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
 
-// fetch compatible Railway
+// fetch compatible Railway / Node
 const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 
 const client = new Client({
@@ -15,12 +15,12 @@ const client = new Client({
 const CHANNEL_ID = process.env.CHANNEL_ID;
 const HF_API_KEY = process.env.HF_API_KEY;
 
-// modèle IA Hugging Face
+// Modèle IA Hugging Face
 const MODEL_URL = "https://api-inference.huggingface.co/models/google/flan-t5-large";
 
 const SYSTEM_PROMPT = `
-Tu es Jodie, une guide experte du jeu Foundation: Galactic Frontier.
-Tu donnes des conseils clairs et utiles pour progresser efficacement.
+Tu es Jodie, un assistant expert du jeu Foundation: Galactic Frontier.
+Tu donnes des conseils simples, efficaces et orientés progression.
 `;
 
 client.on('ready', () => {
@@ -49,10 +49,12 @@ client.on('messageCreate', async (message) => {
 
         const data = await response.json();
 
+        console.log("HF RESPONSE:", data);
+
         const reply =
             data?.[0]?.generated_text ||
             data?.generated_text ||
-            "Je n'ai pas réussi à répondre.";
+            "Erreur IA : aucune réponse.";
 
         await message.reply(reply);
 
