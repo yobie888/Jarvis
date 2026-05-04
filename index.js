@@ -12,36 +12,32 @@ const client = new Client({
 });
 
 /* =========================
-   PROMPT IA
+   SYSTEM PROMPT
 ========================= */
 const SYSTEM_PROMPT = `
 Tu es JODIE.
 
-RÈGLES ABSOLUES :
-- Tu es une IA, jamais un joueur
-- Le joueur est toujours l'utilisateur Discord
-- Utilise son pseudo EXACT
-- Aucun embed, aucun format enrichi
-- Réponse texte simple uniquement
-- Pas de markdown complexe (pas de *, pas de ###, pas de blocs)
-- Réponds comme un commandant militaire
+Règles:
+- IA militaire stratégique
+- jamais embed
+- jamais markdown
+- texte brut uniquement
+- réponses courtes et lisibles
 `;
 
 /* =========================
-   NETTOYAGE TEXTE (IMPORTANT)
-   => FORCE FORMAT BOT TRANSLATOR
+   CLEAN TEXT ULTRA STRICT
 ========================= */
 function cleanText(text) {
     if (!text) return "";
 
     return text
-        // supprime markdown
         .replace(/```[\s\S]*?```/g, "")
         .replace(/\*\*/g, "")
         .replace(/\*/g, "")
         .replace(/#/g, "")
         .replace(/>/g, "")
-        // supprime retours excessifs
+        .replace(/`/g, "")
         .replace(/\n{3,}/g, "\n\n")
         .trim();
 }
@@ -62,7 +58,7 @@ async function askIA(prompt) {
                 { role: "system", content: SYSTEM_PROMPT },
                 { role: "user", content: prompt }
             ],
-            temperature: 0.5
+            temperature: 0.4
         })
     });
 
@@ -70,11 +66,11 @@ async function askIA(prompt) {
 
     let reply = data?.choices?.[0]?.message?.content || "Erreur IA";
 
-    return cleanText(reply); // 🔥 FORCÉ TEXTE BRUT
+    return cleanText(reply);
 }
 
 /* =========================
-   SCORE SYSTEM
+   UPDATE USER
 ========================= */
 function updateUser(userId, message) {
     db.get("SELECT * FROM users WHERE id = ?", [userId], (err, row) => {
@@ -108,6 +104,7 @@ function updateUser(userId, message) {
 
 /* =========================
    MESSAGE HANDLER
+   🔥 FIX COMPATIBILITÉ TRANSLATOR
 ========================= */
 client.on("messageCreate", async (message) => {
 
@@ -125,24 +122,23 @@ client.on("messageCreate", async (message) => {
         async (err, rows) => {
 
             const history = rows
-                .map(r => `Joueur: ${r.question}\nJodie: ${r.answer}`)
+                .map(r => `User: ${r.question}\nJodie: ${r.answer}`)
                 .join("\n");
 
             const prompt = `
-KNOWLEDGE BASE:
+KNOWLEDGE:
 ${KNOWLEDGE}
 
-JOUEUR:
-Nom: ${username}
-ID: ${userId}
+USER:
+${username} (${userId})
 
-HISTORIQUE:
+HISTORY:
 ${history}
 
 QUESTION:
 ${message.content}
 
-Réponds uniquement en texte brut simple, sans mise en forme.
+Réponds en texte simple uniquement.
 `;
 
             const reply = await askIA(prompt);
@@ -152,8 +148,17 @@ Réponds uniquement en texte brut simple, sans mise en forme.
                 [userId, message.content, reply]
             );
 
-            // 🔥 IMPORTANT : PAS D’EMBED
-            await message.channel.send(reply);
+            /* =========================
+               🔥 ENVOI COMPATIBLE TRANSLATOR
+            ========================= */
+
+            // ❌ PAS reply()
+            // ❌ PAS embed
+            // ❌ PAS interaction
+
+            await message.channel.send({
+                content: reply
+            });
         }
     );
 });
