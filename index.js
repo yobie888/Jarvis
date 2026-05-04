@@ -12,7 +12,12 @@ const client = new Client({
 });
 
 const CHANNEL_ID = process.env.CHANNEL_ID;
-const API_KEY = process.env.OPENROUTER_API_KEY;
+const API_KEY = process.env.GROQ_API_KEY;
+
+const SYSTEM_PROMPT = `
+Tu es Jodie, une assistante experte du jeu Foundation: Galactic Frontier.
+Tu donnes des conseils stratégiques clairs, utiles et efficaces pour progresser.
+`;
 
 client.on('ready', () => {
   console.log(`Connecté en tant que ${client.user.tag}`);
@@ -25,26 +30,26 @@ client.on('messageCreate', async (message) => {
   try {
     await message.channel.sendTyping();
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${API_KEY}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://railway.app",
-        "X-Title": "Jarvis Bot"
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "meta-llama/llama-3.1-8b-instruct:free",
+        model: "llama3-8b-8192",
         messages: [
           {
             role: "system",
-            content: "Tu es Jodie, experte du jeu Foundation Galactic Frontier."
+            content: SYSTEM_PROMPT
           },
           {
             role: "user",
             content: message.content
           }
-        ]
+        ],
+        temperature: 0.7,
+        max_tokens: 300
       })
     });
 
