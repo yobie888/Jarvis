@@ -51,7 +51,7 @@ async function askIA(prompt) {
     });
 
     const data = await res.json();
-    return data?.choices?.[0]?.message?.content;
+    return data?.choices?.[0]?.message?.content || "Erreur IA";
 }
 
 /* =========================
@@ -59,12 +59,7 @@ async function askIA(prompt) {
 ========================= */
 function updateUser(userId, message) {
     db.get("SELECT * FROM users WHERE id = ?", [userId], (err, row) => {
-        if (!row) {
-            db.run("INSERT INTO users (id, name, score, rank) VALUES (?, ?, 0, 'RECRUE')",
-                [userId, "unknown"]);
-        }
-
-        let score = (row?.score || 0);
+        let score = row?.score || 0;
 
         const t = message.toLowerCase();
 
@@ -77,11 +72,37 @@ function updateUser(userId, message) {
         else if (score > 8) rank = "STRATÈGE";
         else if (score > 3) rank = "CONFIRMÉ";
 
-        db.run(
-            "UPDATE users SET score = ?, rank = ? WHERE id = ?",
-            [score, rank, userId]
-        );
+        if (!row) {
+            db.run(
+                "INSERT INTO users (id, name, score, rank) VALUES (?, ?, ?, ?)",
+                [userId, "unknown", score, rank]
+            );
+        } else {
+            db.run(
+                "UPDATE users SET score = ?, rank = ? WHERE id = ?",
+                [score, rank, userId]
+            );
+        }
     });
+}
+
+/* =========================
+   OUTILS ENVOI MESSAGE
+   (IMPORTANT POUR TRANSLATOR)
+========================= */
+
+// découpe si message trop long
+function splitMessage(text, max = 2000) {
+    const parts = [];
+    while (text.length > max) {
+        let slice = text.slice(0, max);
+        let lastBreak = slice.lastIndexOf("\n");
+        if (lastBreak > 0) slice = slice.slice(0, lastBreak);
+        parts.push(slice);
+        text = text.slice(slice.length);
+    }
+    if (text.length) parts.push(text);
+    return parts;
 }
 
 /* =========================
@@ -101,8 +122,9 @@ client.on("messageCreate", async (message) => {
         [userId],
         async (err, rows) => {
 
-            const history = rows
+            const history = (rows || [])
                 .map(r => `Joueur: ${r.question}\nJodie: ${r.answer}`)
+                .reverse()
                 .join("\n");
 
             const prompt = `
@@ -128,7 +150,17 @@ Réponds précisément.
                 [userId, message.content, reply]
             );
 
-            message.reply(reply);
+            /* =========================
+               ENVOI COMPATIBLE TRANSLATOR
+            ========================= */
+
+            const messages = splitMessage(reply);
+
+            for (const msg of messages) {
+                await message.reply({
+                    content: msg
+                });
+            }
         }
     );
 });
