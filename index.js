@@ -1,6 +1,9 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
 
+// fetch compatible Railway
+const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
+
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -12,13 +15,12 @@ const client = new Client({
 const CHANNEL_ID = process.env.CHANNEL_ID;
 const HF_API_KEY = process.env.HF_API_KEY;
 
-// Modèle Hugging Face (tu peux le changer plus tard si besoin)
-const MODEL_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2";
+// modèle IA Hugging Face
+const MODEL_URL = "https://api-inference.huggingface.co/models/google/flan-t5-large";
 
 const SYSTEM_PROMPT = `
-Tu es Jodie, un personnage emblématique du jeu Foundation: Galactic Frontier.
-Tu donnes des conseils stratégiques précis pour optimiser les performances.
-Réponses claires, utiles et orientées gameplay.
+Tu es Jodie, une guide experte du jeu Foundation: Galactic Frontier.
+Tu donnes des conseils clairs et utiles pour progresser efficacement.
 `;
 
 client.on('ready', () => {
@@ -32,7 +34,7 @@ client.on('messageCreate', async (message) => {
     try {
         await message.channel.sendTyping();
 
-        const prompt = `${SYSTEM_PROMPT}\n\nUtilisateur: ${message.content}\nRéponse:`;
+        const prompt = `${SYSTEM_PROMPT}\n\nUtilisateur: ${message.content}`;
 
         const response = await fetch(MODEL_URL, {
             method: "POST",
@@ -41,25 +43,22 @@ client.on('messageCreate', async (message) => {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                inputs: prompt,
-                parameters: {
-                    max_new_tokens: 200,
-                    temperature: 0.7,
-                }
+                inputs: prompt
             }),
         });
 
         const data = await response.json();
 
         const reply =
-            data?.[0]?.generated_text?.split("Réponse:")?.pop()?.trim()
-            || "Erreur IA : aucune réponse reçue.";
+            data?.[0]?.generated_text ||
+            data?.generated_text ||
+            "Je n'ai pas réussi à répondre.";
 
         await message.reply(reply);
 
     } catch (err) {
         console.error(err);
-        message.reply("Erreur IA : impossible de répondre pour le moment.");
+        message.reply("Erreur IA : impossible de répondre.");
     }
 });
 
