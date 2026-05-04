@@ -29,14 +29,16 @@ client.on('messageCreate', async (message) => {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${API_KEY}`,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://railway.app",
+        "X-Title": "Jarvis Bot"
       },
       body: JSON.stringify({
         model: "deepseek/deepseek-chat-v3-0324:free",
         messages: [
           {
             role: "system",
-            content: "Tu es Jodie, experte du jeu Foundation Galactic Frontier. Tu aides les joueurs avec builds, stratégie, raids, économie et progression."
+            content: "Tu es Jodie, experte stratégie gaming."
           },
           {
             role: "user",
@@ -48,14 +50,17 @@ client.on('messageCreate', async (message) => {
 
     const data = await response.json();
 
+    console.log("OPENROUTER DATA:", JSON.stringify(data, null, 2));
+
     const reply =
       data?.choices?.[0]?.message?.content ||
+      data?.error?.message ||
       "Aucune réponse.";
 
     await message.reply(reply);
 
   } catch (err) {
-    console.error(err);
+    console.error("ERREUR:", err);
     await message.reply("Erreur IA.");
   }
 });
