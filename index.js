@@ -1,6 +1,5 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
-const OpenAI = require('openai');
 
 const client = new Client({
     intents: [
@@ -10,14 +9,16 @@ const client = new Client({
     ],
 });
 
-const openai = new OpenAI({
-    apiKey: process.env.HF_API_KEY,
-});
-
 const CHANNEL_ID = process.env.CHANNEL_ID;
+const HF_API_KEY = process.env.HF_API_KEY;
+
+// Modèle Hugging Face (tu peux le changer plus tard si besoin)
+const MODEL_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2";
 
 const SYSTEM_PROMPT = `
-Tu es Jodie, un personnage emblématique du jeu Foundation: Galactic Frontier. Tu es une guide experte, profondément immergée dans cet univers. Tu connais les noms des personnages, les stratégies optimales, les builds les plus puissants, et tu aides les joueurs à progresser en leur donnant des conseils concrets et adaptés à chaque situation. Réponds aux questions avec des suggestions de builds, des astuces pour les raids, et des analyses stratégiques. Fais en sorte que chaque réponse plonge le joueur dans l’univers galactique, tout en restant précise et orientée performance.
+Tu es Jodie, un personnage emblématique du jeu Foundation: Galactic Frontier.
+Tu donnes des conseils stratégiques précis pour optimiser les performances.
+Réponses claires, utiles et orientées gameplay.
 `;
 
 client.on('ready', () => {
@@ -25,26 +26,40 @@ client.on('ready', () => {
 });
 
 client.on('messageCreate', async (message) => {
-    if (message.author.bot) return; // Ignorer les messages des bots
-    if (message.channel.id !== CHANNEL_ID) return; // Répondre seulement dans le salon dédié
+    if (message.author.bot) return;
+    if (message.channel.id !== CHANNEL_ID) return;
 
     try {
-        await message.channel.sendTyping(); // Indique que le bot réfléchit
+        await message.channel.sendTyping();
 
-        const response = await openai.chat.completions.create({
-            model: 'gpt-4o', // Assure-toi d’utiliser le modèle correct disponible sur Hugging Face
-            messages: [
-                { role: 'system', content: SYSTEM_PROMPT },
-                { role: 'user', content: message.content },
-            ],
+        const prompt = `${SYSTEM_PROMPT}\n\nUtilisateur: ${message.content}\nRéponse:`;
+
+        const response = await fetch(MODEL_URL, {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${HF_API_KEY}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                inputs: prompt,
+                parameters: {
+                    max_new_tokens: 200,
+                    temperature: 0.7,
+                }
+            }),
         });
 
-        // Répondre avec la réponse de l’IA
-        message.reply(response.choices[0].message.content);
+        const data = await response.json();
+
+        const reply =
+            data?.[0]?.generated_text?.split("Réponse:")?.pop()?.trim()
+            || "Erreur IA : aucune réponse reçue.";
+
+        await message.reply(reply);
 
     } catch (err) {
         console.error(err);
-        message.reply("Jodie n'a pas pu répondre pour l’instant, essaie avec une autre question !");
+        message.reply("Erreur IA : impossible de répondre pour le moment.");
     }
 });
 
