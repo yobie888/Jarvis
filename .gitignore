@@ -1,16 +1,41 @@
-# dependencies
+# =====================
+# DEPENDENCIES
+# =====================
 node_modules/
 
-# secrets
+# =====================
+# SECRETS (IMPORTANT)
+# =====================
 .env
 
-# database
+# =====================
+# DATABASE (SQLite)
+# =====================
 *.db
 *.sqlite
 *.sqlite3
+*.db-journal
 
-# logs
+# =====================
+# LOGS
+# =====================
 *.log
+logs/
 
-# system
+# =====================
+# SYSTEM FILES
+# =====================
 .DS_Store
+Thumbs.db
+
+# =====================
+# IDE (optionnel mais recommandé)
+# =====================
+.vscode/
+.idea/
+
+# =====================
+# RAILWAY / DEPLOY
+# =====================
+dist/
+build/
