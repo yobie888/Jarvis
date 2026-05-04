@@ -38,9 +38,17 @@ client.on('messageCreate', async (message) => {
             })
         });
 
-        const data = await response.json();
+        const text = await response.text();
 
-        console.log("HF DATA:", data);
+        console.log("HF RAW:", text);
+
+        let data;
+
+        try {
+            data = JSON.parse(text);
+        } catch {
+            return message.reply("Erreur Hugging Face : réponse invalide.");
+        }
 
         if (data.error) {
             return message.reply("Erreur HF : " + data.error);
@@ -48,12 +56,12 @@ client.on('messageCreate', async (message) => {
 
         const reply =
             data?.[0]?.generated_text ||
-            "Aucune réponse IA.";
+            "Aucune réponse.";
 
         await message.reply(reply);
 
     } catch (err) {
-        console.error("ERREUR:", err);
+        console.error(err);
         await message.reply("Erreur technique IA.");
     }
 });
