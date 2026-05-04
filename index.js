@@ -1,5 +1,5 @@
 require("dotenv").config();
-const { Client, GatewayIntentBits, WebhookClient } = require("discord.js");
+const { Client, GatewayIntentBits } = require("discord.js");
 const db = require("./db");
 const KNOWLEDGE = require("./knowledge");
 
@@ -12,22 +12,22 @@ const client = new Client({
 });
 
 /* =========================
-   WEBHOOK (IMPORTANT)
+   CONFIG SALONS
 ========================= */
-const webhook = new WebhookClient({ url: process.env.WEBHOOK_URL });
+const SOURCE_CHANNEL_ID = process.env.SOURCE_CHANNEL_ID;
 
 /* =========================
-   SYSTEM PROMPT
+   IA PROMPT
 ========================= */
 const SYSTEM_PROMPT = `
 Tu es JODIE.
 
-RÈGLES :
-- Texte simple uniquement
-- Pas d'embeds
-- Pas de mise en forme spéciale
-- Réponse brute Discord
-- IA stratégique militaire
+Règles :
+- texte simple uniquement
+- aucune mise en forme
+- pas d'embed
+- pas de markdown complexe
+- réponse directe
 `;
 
 /* =========================
@@ -51,7 +51,7 @@ async function askIA(prompt) {
     });
 
     const data = await res.json();
-    return data?.choices?.[0]?.message?.content || "Erreur IA";
+    return data?.choices?.[0]?.message?.content || "erreur";
 }
 
 /* =========================
@@ -59,15 +59,14 @@ async function askIA(prompt) {
 ========================= */
 client.on("messageCreate", async (message) => {
 
-    if (!message.content) return;
-    if (message.author.bot) return; // on ignore bots utilisateurs mais JODIE est webhook maintenant
+    if (message.author.bot) return;
+    if (message.channel.id !== SOURCE_CHANNEL_ID) return;
 
-    const userId = message.author.id;
     const username = message.author.username;
 
     db.all(
         "SELECT * FROM messages WHERE userId = ? ORDER BY id DESC LIMIT 5",
-        [userId],
+        [message.author.id],
         async (err, rows) => {
 
             const history = rows
@@ -77,39 +76,28 @@ client.on("messageCreate", async (message) => {
             const prompt = `
 ${KNOWLEDGE}
 
-JOUEUR:
-Nom: ${username}
-ID: ${userId}
+Joueur: ${username}
 
-HISTORIQUE:
+Historique:
 ${history}
 
-QUESTION:
+Message:
 ${message.content}
 
-Réponds en texte simple uniquement.
+Réponds simplement en texte brut.
 `;
 
             const reply = await askIA(prompt);
 
             db.run(
                 "INSERT INTO messages (userId, question, answer) VALUES (?, ?, ?)",
-                [userId, message.content, reply]
+                [message.author.id, message.content, reply]
             );
 
-            /* =========================
-               ENVOI COMPATIBLE TRANSLATOR
-            ========================= */
-            webhook.send({
-                content: reply,
-                username: "JODIE",
-                allowedMentions: { parse: [] }
-            });
+            /* IMPORTANT : MESSAGE NORMAL DISCORD */
+            message.channel.send(reply);
         }
     );
 });
 
-/* =========================
-   LOGIN
-========================= */
 client.login(process.env.DISCORD_TOKEN);
