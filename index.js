@@ -12,17 +12,27 @@ const client = new Client({
 });
 
 /* =========================
-   PROMPT IA (JODIE)
+   PROMPT IA FIXE
 ========================= */
 const SYSTEM_PROMPT = `
 Tu es JODIE.
 
-Règles :
-- IA stratégique
-- mémoire des joueurs
-- texte simple uniquement
-- PAS d'embeds
-- PAS de format spécial
+RÈGLES ABSOLUES :
+- Tu es une IA, jamais un joueur
+- Tu dois utiliser le pseudo du joueur
+- Tu réponds de manière stratégique
+- Tu te souviens du contexte
+
+IMPORTANT FORMAT :
+- Tu écris UNIQUEMENT du texte simple
+- INTERDICTION ABSOLUE :
+  * embeds
+  * markdown complexe
+  * JSON
+  * code blocks
+  * format rich
+- Tu réponds comme un humain dans Discord
+- phrases simples lisibles par un bot translator
 `;
 
 /* =========================
@@ -56,8 +66,10 @@ function updateUser(userId, message) {
     db.get("SELECT * FROM users WHERE id = ?", [userId], (err, row) => {
 
         if (!row) {
-            db.run("INSERT INTO users (id, name, score, rank) VALUES (?, ?, 0, 'RECRUE')",
-                [userId, "unknown"]);
+            db.run(
+                "INSERT INTO users (id, name, score, rank) VALUES (?, ?, 0, 'RECRUE')",
+                [userId, "unknown"]
+            );
             row = { score: 0 };
         }
 
@@ -74,9 +86,24 @@ function updateUser(userId, message) {
         else if (score > 8) rank = "STRATÈGE";
         else if (score > 3) rank = "CONFIRMÉ";
 
-        db.run("UPDATE users SET score = ?, rank = ? WHERE id = ?",
-            [score, rank, userId]);
+        db.run(
+            "UPDATE users SET score = ?, rank = ? WHERE id = ?",
+            [score, rank, userId]
+        );
     });
+}
+
+/* =========================
+   FORCER TEXTE SIMPLE (IMPORTANT POUR TRANSLATOR BOT)
+========================= */
+function sanitizeOutput(text) {
+    return text
+        .replace(/```/g, "")       // supprime code blocks
+        .replace(/\*\*/g, "")      // supprime bold markdown
+        .replace(/__/g, "")        // underline
+        .replace(/#/g, "")         // headers markdown
+        .replace(/$begin:math:display$\|$end:math:display$/g, "")     // brackets
+        .trim();
 }
 
 /* =========================
@@ -84,7 +111,10 @@ function updateUser(userId, message) {
 ========================= */
 client.on("messageCreate", async (message) => {
 
+    // ignore bots (IMPORTANT)
     if (message.author.bot) return;
+
+    // only channel target
     if (message.channel.id !== process.env.CHANNEL_ID) return;
 
     const userId = message.author.id;
@@ -97,37 +127,39 @@ client.on("messageCreate", async (message) => {
         [userId],
         async (err, rows) => {
 
-            const history = (rows || [])
-                .map(r => `Joueur: ${r.question}\nJodie: ${r.answer}`)
+            const history = rows
+                .map(r => `Joueur: ${r.question} | Jodie: ${r.answer}`)
                 .join("\n");
 
             const prompt = `
 ${KNOWLEDGE}
 
-JOUEUR:
-Nom: ${username}
-ID: ${userId}
+Joueur: ${username}
+Message: ${message.content}
 
-HISTORIQUE:
+Historique:
 ${history}
 
-QUESTION:
-${message.content}
-
-Réponds simplement en texte brut.
+Réponds clairement en texte simple.
 `;
 
-            const reply = await askIA(prompt);
+            let reply = await askIA(prompt);
+
+            // IMPORTANT FIX TRANSLATOR BOT
+            reply = sanitizeOutput(reply);
 
             db.run(
                 "INSERT INTO messages (userId, question, answer) VALUES (?, ?, ?)",
                 [userId, message.content, reply]
             );
 
-            // Envoi normal de message (pas de webhook, pas d'embed)
+            // IMPORTANT: reply as NORMAL MESSAGE (not embed, not webhook)
             await message.channel.send(reply);
         }
     );
 });
 
+/* =========================
+   LOGIN
+========================= */
 client.login(process.env.DISCORD_TOKEN);
