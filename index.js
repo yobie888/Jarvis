@@ -12,22 +12,26 @@ const client = new Client({
 });
 
 /* =========================
-   PROMPT IA
+   PROMPT IA FIXE
 ========================= */
 const SYSTEM_PROMPT = `
 Tu es JODIE.
 
-Règles :
-- Tu es une IA
-- Réponds uniquement en texte brut
-- NE JAMAIS utiliser embed
-- NE JAMAIS utiliser format riche
-- Réponds uniquement avec du texte simple lisible Discord
-- Pas de markdown complexe inutile
+RÈGLES ABSOLUES :
+- Tu es une IA, jamais un joueur
+- Le joueur est toujours l'utilisateur Discord
+- Tu dois utiliser son pseudo EXACT
+- Tu ne dois jamais t'appeler joueur
+
+COMPORTEMENT :
+- reconnaissance joueur obligatoire
+- mémoire des conversations
+- analyse stratégique
+- commandant militaire
 `;
 
 /* =========================
-   GROQ API
+   GROQ
 ========================= */
 async function askIA(prompt) {
     const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -47,24 +51,20 @@ async function askIA(prompt) {
     });
 
     const data = await res.json();
-    return data?.choices?.[0]?.message?.content || "Erreur IA";
+    return data?.choices?.[0]?.message?.content;
 }
 
 /* =========================
-   SCORE
+   SCORE SYSTEM
 ========================= */
 function updateUser(userId, message) {
     db.get("SELECT * FROM users WHERE id = ?", [userId], (err, row) => {
-
         if (!row) {
-            db.run(
-                "INSERT INTO users (id, name, score, rank) VALUES (?, ?, 0, 'RECRUE')",
-                [userId, "unknown"]
-            );
-            row = { score: 0 };
+            db.run("INSERT INTO users (id, name, score, rank) VALUES (?, ?, 0, 'RECRUE')",
+                [userId, "unknown"]);
         }
 
-        let score = row?.score || 0;
+        let score = (row?.score || 0);
 
         const t = message.toLowerCase();
 
@@ -77,24 +77,19 @@ function updateUser(userId, message) {
         else if (score > 8) rank = "STRATÈGE";
         else if (score > 3) rank = "CONFIRMÉ";
 
-        db.run("UPDATE users SET score = ?, rank = ? WHERE id = ?", [
-            score,
-            rank,
-            userId
-        ]);
+        db.run(
+            "UPDATE users SET score = ?, rank = ? WHERE id = ?",
+            [score, rank, userId]
+        );
     });
 }
 
 /* =========================
    MESSAGE HANDLER
-   (IMPORTANT POUR TRANSLATOR)
 ========================= */
 client.on("messageCreate", async (message) => {
-
     if (message.author.bot) return;
-
-    // IMPORTANT : ne filtre PAS trop, sinon translator ne voit rien
-    if (!process.env.CHANNEL_ID || message.channel.id !== process.env.CHANNEL_ID) return;
+    if (message.channel.id !== process.env.CHANNEL_ID) return;
 
     const userId = message.author.id;
     const username = message.author.username;
@@ -106,41 +101,34 @@ client.on("messageCreate", async (message) => {
         [userId],
         async (err, rows) => {
 
-            const history = (rows || [])
-                .map(r => `User: ${r.question}\nJodie: ${r.answer}`)
+            const history = rows
+                .map(r => `Joueur: ${r.question}\nJodie: ${r.answer}`)
                 .join("\n");
 
             const prompt = `
 ${KNOWLEDGE}
 
-User: ${username}
+JOUEUR:
+Nom: ${username}
 ID: ${userId}
 
-History:
+HISTORIQUE:
 ${history}
 
-Question:
+QUESTION:
 ${message.content}
+
+Réponds précisément.
 `;
 
             const reply = await askIA(prompt);
 
-            // IMPORTANT FIX TRANSLATOR :
-            // MESSAGE SIMPLE UNIQUEMENT
-            const cleanReply = String(reply)
-                .replace(/```/g, "")
-                .replace(/__/g, "")
-                .trim();
-
             db.run(
                 "INSERT INTO messages (userId, question, answer) VALUES (?, ?, ?)",
-                [userId, message.content, cleanReply]
+                [userId, message.content, reply]
             );
 
-            // 🔥 IMPORTANT : PAS EMBED, PAS REPLY COMPLEXE
-            message.channel.send({
-                content: cleanReply
-            });
+            message.reply(reply);
         }
     );
 });
