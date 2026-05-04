@@ -1,128 +1,76 @@
-require('dotenv').config();
-const { Client, GatewayIntentBits } = require('discord.js');
-const sqlite3 = require('sqlite3').verbose();
+require("dotenv").config();
+const { Client, GatewayIntentBits } = require("discord.js");
+const db = require("./db");
+const KNOWLEDGE = require("./knowledge");
 
-/* =========================
-   BOT DISCORD
-========================= */
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent,
-    ],
+        GatewayIntentBits.MessageContent
+    ]
 });
 
 /* =========================
-   CONFIG
+   PROMPT IA FIXE
 ========================= */
-const CHANNEL_ID = process.env.CHANNEL_ID;
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const SYSTEM_PROMPT = `
+Tu es JODIE.
 
-/* =========================
-   BASE DE DONNÉES (MEMOIRE PRO)
-========================= */
-const db = new sqlite3.Database("./jodie.db");
+RÈGLES ABSOLUES :
+- Tu es une IA, jamais un joueur
+- Le joueur est toujours l'utilisateur Discord
+- Tu dois utiliser son pseudo EXACT
+- Tu ne dois jamais t'appeler joueur
 
-db.serialize(() => {
-    db.run(`
-        CREATE TABLE IF NOT EXISTS users (
-            id TEXT PRIMARY KEY,
-            username TEXT,
-            score INTEGER DEFAULT 0,
-            rank TEXT DEFAULT 'RECRUE'
-        )
-    `);
-
-    db.run(`
-        CREATE TABLE IF NOT EXISTS history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            userId TEXT,
-            question TEXT,
-            answer TEXT,
-            date INTEGER
-        )
-    `);
-});
-
-/* =========================
-   KNOWLEDGE GAME
-========================= */
-const GAME_KNOWLEDGE = `
-JODIE - STRATÈGE GALACTIC FRONTIER
-
-- sécurité : drones + garnison
-- raids : coordination obligatoire
-- TP : via raids
-- gloire : zones rouges
-- VS : stratégie et retrait intelligent
-- tribus : puissance + organisation
+COMPORTEMENT :
+- reconnaissance joueur obligatoire
+- mémoire des conversations
+- analyse stratégique
+- commandant militaire
 `;
 
 /* =========================
-   IA GROQ
+   GROQ
 ========================= */
 async function askIA(prompt) {
     const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: {
-            "Authorization": `Bearer ${GROQ_API_KEY}`,
-            "Content-Type": "application/json",
+            "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
+            "Content-Type": "application/json"
         },
         body: JSON.stringify({
             model: "llama-3.1-8b-instant",
             messages: [
-                { role: "system", content: "Tu es Jodie, IA stratégique de jeu." },
+                { role: "system", content: SYSTEM_PROMPT },
                 { role: "user", content: prompt }
             ],
-            temperature: 0.7
-        }),
+            temperature: 0.5
+        })
     });
 
     const data = await res.json();
-    return data?.choices?.[0]?.message?.content || "Erreur IA";
+    return data?.choices?.[0]?.message?.content;
 }
 
 /* =========================
-   READY
+   SCORE SYSTEM
 ========================= */
-client.on("ready", () => {
-    console.log(`Connecté en tant que ${client.user.tag}`);
-});
-
-/* =========================
-   MESSAGE SYSTEM
-========================= */
-client.on("messageCreate", async (message) => {
-    if (message.author.bot) return;
-    if (message.channel.id !== CHANNEL_ID) return;
-
-    const userId = message.author.id;
-    const username = message.author.username;
-
-    message.channel.sendTyping();
-
-    /* =========================
-       USER LOAD
-    ========================= */
-    db.get("SELECT * FROM users WHERE id = ?", [userId], (err, user) => {
-
-        if (!user) {
-            db.run(
-                "INSERT INTO users (id, username, score, rank) VALUES (?, ?, 0, 'RECRUE')",
-                [userId, username]
-            );
-            user = { score: 0, rank: "RECRUE" };
+function updateUser(userId, message) {
+    db.get("SELECT * FROM users WHERE id = ?", [userId], (err, row) => {
+        if (!row) {
+            db.run("INSERT INTO users (id, name, score, rank) VALUES (?, ?, 0, 'RECRUE')",
+                [userId, "unknown"]);
         }
 
-        let score = user.score;
+        let score = (row?.score || 0);
 
-        const text = message.content.toLowerCase();
+        const t = message.toLowerCase();
 
-        if (text.includes("raid")) score += 2;
-        if (text.includes("vs")) score += 2;
-        if (text.includes("gloire")) score += 1;
-        if (text.includes("tribus")) score += 2;
+        if (t.includes("raid")) score += 2;
+        if (t.includes("vs")) score += 2;
+        if (t.includes("tribu")) score += 2;
 
         let rank = "RECRUE";
         if (score > 15) rank = "COMMANDANT";
@@ -133,48 +81,56 @@ client.on("messageCreate", async (message) => {
             "UPDATE users SET score = ?, rank = ? WHERE id = ?",
             [score, rank, userId]
         );
+    });
+}
 
-        /* =========================
-           HISTORIQUE
-        ========================= */
-        db.all(
-            "SELECT * FROM history WHERE userId = ? ORDER BY id DESC LIMIT 5",
-            [userId],
-            async (err, rows) => {
+/* =========================
+   MESSAGE HANDLER
+========================= */
+client.on("messageCreate", async (message) => {
+    if (message.author.bot) return;
+    if (message.channel.id !== process.env.CHANNEL_ID) return;
 
-                const history = rows.reverse()
-                    .map(h => `User: ${h.question}\nJodie: ${h.answer}`)
-                    .join("\n");
+    const userId = message.author.id;
+    const username = message.author.username;
 
-                const prompt = `
-${GAME_KNOWLEDGE}
+    updateUser(userId, message.content);
 
-JOUEUR: ${username}
-RANK: ${rank}
-SCORE: ${score}
+    db.all(
+        "SELECT * FROM messages WHERE userId = ? ORDER BY id DESC LIMIT 5",
+        [userId],
+        async (err, rows) => {
 
-IMPORTANT:
-Toujours parler à ${username}.
-Tu es une IA, pas le joueur.
+            const history = rows
+                .map(r => `Joueur: ${r.question}\nJodie: ${r.answer}`)
+                .join("\n");
+
+            const prompt = `
+${KNOWLEDGE}
+
+JOUEUR:
+Nom: ${username}
+ID: ${userId}
 
 HISTORIQUE:
 ${history}
 
 QUESTION:
 ${message.content}
+
+Réponds précisément.
 `;
 
-                const reply = await askIA(prompt);
+            const reply = await askIA(prompt);
 
-                db.run(
-                    "INSERT INTO history (userId, question, answer, date) VALUES (?, ?, ?, ?)",
-                    [userId, message.content, reply, Date.now()]
-                );
+            db.run(
+                "INSERT INTO messages (userId, question, answer) VALUES (?, ?, ?)",
+                [userId, message.content, reply]
+            );
 
-                message.reply(reply);
-            }
-        );
-    });
+            message.reply(reply);
+        }
+    );
 });
 
 /* =========================
